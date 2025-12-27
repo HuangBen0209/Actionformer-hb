@@ -172,7 +172,8 @@ def main(args):
     # map_location参数确保将权重加载到正确的GPU设备上
     checkpoint = torch.load(
         ckpt_file,
-        map_location=lambda storage, loc: storage.cuda(int(cfg['devices'][0]))
+        map_location=lambda storage, loc: storage.cuda(int(cfg['devices'][0])),
+        weights_only=False  # 显式关闭权重仅加载模式
     )
 
     # 加载EMA（指数移动平均）模型的权重，通常EMA模型泛化性能更好

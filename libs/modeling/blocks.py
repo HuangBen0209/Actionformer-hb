@@ -12,7 +12,6 @@ class MaskedConv1D(nn.Module):
 
     这是专门为处理变长序列设计的卷积层，确保padding部分不参与计算。
     只支持内核大小为奇数且padding = kernel_size//2的情况，这是时序模型的标准配置。
-
     参数说明:
         in_channels: 输入通道数
         out_channels: 输出通道数
@@ -24,7 +23,6 @@ class MaskedConv1D(nn.Module):
         bias: 是否使用偏置
         padding_mode: 填充模式
     """
-
     def __init__(
             self,
             in_channels,
@@ -39,7 +37,6 @@ class MaskedConv1D(nn.Module):
     ):
         super().__init__()
         # 要求内核大小必须是奇数，并且填充必须是内核大小的一半
-        # 这样设计可以确保时序对齐，特别是在因果卷积或掩码卷积中
         assert (kernel_size % 2 == 1) and (kernel_size // 2 == padding)
         self.stride = stride
         self.conv = nn.Conv1d(in_channels, out_channels, kernel_size,
@@ -47,14 +44,12 @@ class MaskedConv1D(nn.Module):
         # 如果使用偏置，初始化为0，这是一种常见的做法以避免初始偏差过大
         if bias:
             torch.nn.init.constant_(self.conv.bias, 0.)
-
     def forward(self, x, mask):
         """
         前向传播
         参数:
             x: 输入张量，形状为 (B, C, T)，其中B是批次大小，C是通道数，T是序列长度
             mask: 掩码张量，形状为 (B, 1, T)，bool类型，True表示该位置有效（不是padding）
-
         返回:
             out_conv: 卷积输出，形状为 (B, out_channels, T')
             out_mask: 更新后的掩码，形状为 (B, 1, T')
@@ -79,8 +74,6 @@ class MaskedConv1D(nn.Module):
         out_conv = out_conv * out_mask.detach()
         out_mask = out_mask.bool()  # 将掩码转换回bool类型
         return out_conv, out_mask
-
-
 class LayerNorm(nn.Module):
     """
     支持(B, C, T)形状输入的层归一化
@@ -154,7 +147,6 @@ def get_sinusoid_encoding(n_position, d_hid):
 
     # 转换为PyTorch张量并调整形状为(1, d_hid, n_position)
     return torch.FloatTensor(sinusoid_table).unsqueeze(0).transpose(1, 2)
-
 def get_relative_position_encoding(n_position, d_hid):
     """
     Transformer-XL风格的相对位置编码
@@ -167,18 +159,14 @@ def get_relative_position_encoding(n_position, d_hid):
     """
     # 1. 生成相对距离范围：[-n_position+1, n_position-1]（覆盖所有可能的相对距离）
     relative_positions = np.arange(-n_position + 1, n_position, 1)
-
     # 2. 定义相对位置角度计算函数（和绝对编码公式一致，但输入是「相对距离」而非「绝对位置」）
     def get_relative_angle_vec(relative_distance):
         return [relative_distance / np.power(10000, 2 * (hid_j // 2) / d_hid) for hid_j in range(d_hid)]
-
     # 3. 生成所有相对距离的角度表：形状 (2*n_position-1, d_hid)
     rel_sinusoid_table = np.array([get_relative_angle_vec(pos_i) for pos_i in relative_positions])
-
     # 4. 奇偶维度分别应用sin/cos（和绝对编码逻辑一致）
     rel_sinusoid_table[:, 0::2] = np.sin(rel_sinusoid_table[:, 0::2])  # 偶数维度用正弦
     rel_sinusoid_table[:, 1::2] = np.cos(rel_sinusoid_table[:, 1::2])  # 奇数维度用余弦
-
     # 5. 转换为PyTorch张量（无需额外调整维度，适配Transformer-XL的注意力计算）
     return torch.FloatTensor(rel_sinusoid_table)
 
@@ -193,7 +181,6 @@ class MaskedMHA(nn.Module):
         attn_pdrop: 注意力dropout率
         proj_pdrop: 投影层dropout率
     """
-
     def __init__(
             self,
             n_embd,  # 输入特征维度
@@ -261,7 +248,6 @@ class MaskedMHA(nn.Module):
         # 输出投影和dropout
         out = self.proj_drop(self.proj(out)) * mask.to(out.dtype)
         return out, mask
-
 
 class MaskedMHCA(nn.Module):
     """
@@ -392,12 +378,9 @@ class MaskedMHCA(nn.Module):
         # 步骤5: 输出投影
         out = self.proj_drop(self.proj(out)) * qx_mask.to(out.dtype)
         return out, qx_mask
-
-
 class LocalMaskedMHCA(nn.Module):
     """
     局部窗口多头卷积注意力（Longformer风格）
-
     专门为超长视频序列（几千帧）设计，将计算复杂度从O(T²)降低到O(T×window_size)。
     这是通过滑动窗口（sliding window）注意力实现的，每个位置只关注其附近窗口内的其他位置。
     实现参考自Longformer论文和HuggingFace实现。
@@ -481,7 +464,6 @@ class LocalMaskedMHCA(nn.Module):
             self.rel_pe = nn.Parameter(
                 torch.zeros(1, 1, self.n_head, self.window_size))
             trunc_normal_(self.rel_pe, std=(2.0 / self.n_embd) ** 0.5)
-
     @staticmethod
     def _chunk(x, window_overlap):
         """
@@ -544,7 +526,6 @@ class LocalMaskedMHCA(nn.Module):
     def _pad_and_diagonalize(x):
         """
         将每行向右移动一步，将列转换为对角线
-
         这是滑动窗口注意力计算中的关键步骤，用于将chunked的注意力分数
         转换为对角线形式的矩阵。
         """
@@ -558,7 +539,6 @@ class LocalMaskedMHCA(nn.Module):
         )
         x = x[:, :, :, :-1]  # 调整形状
         return x
-
     def _sliding_chunks_query_key_matmul(self, query, key, num_heads, window_overlap):
         """
         使用滑动窗口注意力模式计算查询和键的矩阵乘法
@@ -571,27 +551,21 @@ class LocalMaskedMHCA(nn.Module):
         # 序列长度必须能被2w整除
         assert seq_len % (window_overlap * 2) == 0
         assert query.size() == key.size()
-
         chunks_count = seq_len // window_overlap - 1
-
         # 将查询和键分割成chunk
         chunk_query = self._chunk(query, window_overlap)
         chunk_key = self._chunk(key, window_overlap)
-
         # 矩阵乘法计算chunk之间的注意力分数
         diagonal_chunked_attention_scores = torch.einsum(
             "bcxd,bcyd->bcxy", (chunk_query, chunk_key))
-
         # 将对角线转换为列
         diagonal_chunked_attention_scores = self._pad_and_transpose_last_two_dims(
             diagonal_chunked_attention_scores, padding=(0, 0, 0, 1)
         )
-
         # 为整体注意力矩阵分配空间
         diagonal_attention_scores = diagonal_chunked_attention_scores.new_empty(
             (batch_size * num_heads, chunks_count + 1, window_overlap, window_overlap * 2 + 1)
         )
-
         # 将chunked注意力分数复制到整体注意力矩阵中
         # - 复制主对角线和上三角部分
         diagonal_attention_scores[:, :-1, :, window_overlap:] = diagonal_chunked_attention_scores[
@@ -604,24 +578,19 @@ class LocalMaskedMHCA(nn.Module):
         diagonal_attention_scores[:, 1:, :, :window_overlap] = diagonal_chunked_attention_scores[
             :, :, -(window_overlap + 1): -1, window_overlap + 1:
         ]
-
         diagonal_attention_scores[:, 0, 1:window_overlap, 1:window_overlap] = diagonal_chunked_attention_scores[
             :, 0, : window_overlap - 1, 1 - window_overlap:
         ]
-
         # 分离批次和头维度
         diagonal_attention_scores = diagonal_attention_scores.view(
             batch_size, num_heads, seq_len, 2 * window_overlap + 1
         ).transpose(2, 1)
-
         # 屏蔽无效位置
         self._mask_invalid_locations(diagonal_attention_scores, window_overlap)
         return diagonal_attention_scores
-
     def _sliding_chunks_matmul_attn_probs_value(self, attn_probs, value, num_heads, window_overlap):
         """
         与_sliding_chunks_query_key_matmul类似，但用于注意力概率和值的乘法
-
         返回的张量形状与attn_probs相同。
         """
         bnh, seq_len, head_dim = value.size()
@@ -629,15 +598,12 @@ class LocalMaskedMHCA(nn.Module):
         assert seq_len % (window_overlap * 2) == 0
         assert attn_probs.size(3) == 2 * window_overlap + 1
         chunks_count = seq_len // window_overlap - 1
-
         # 重塑注意力概率
         chunked_attn_probs = attn_probs.transpose(1, 2).reshape(
             batch_size * num_heads, seq_len // window_overlap, window_overlap, 2 * window_overlap + 1
         )
-
         # 在序列开始和结束处填充值
         padded_value = nn.functional.pad(value, (0, 0, window_overlap, window_overlap), value=-1)
-
         # 将填充后的值分割成chunk
         chunked_value_size = (batch_size * num_heads, chunks_count + 1, 3 * window_overlap, head_dim)
         chunked_value_stride = padded_value.stride()
@@ -648,18 +614,14 @@ class LocalMaskedMHCA(nn.Module):
             chunked_value_stride[2],
         )
         chunked_value = padded_value.as_strided(size=chunked_value_size, stride=chunked_value_stride)
-
         # 对角线化注意力概率
         chunked_attn_probs = self._pad_and_diagonalize(chunked_attn_probs)
-
         # 计算上下文向量
         context = torch.einsum("bcwd,bcdh->bcwh", (chunked_attn_probs, chunked_value))
         return context.view(batch_size, num_heads, seq_len, head_dim)
-
     def forward(self, x, mask):
         """
         前向传播
-
         步骤:
         1. 深度卷积
         2. 查询、键、值变换和重塑
@@ -667,7 +629,6 @@ class LocalMaskedMHCA(nn.Module):
         4. 计算注意力值乘积和输出投影
         """
         B, C, T = x.size()
-
         # 步骤1: 深度卷积
         q, qx_mask = self.query_conv(x, mask)
         q = self.query_norm(q)
@@ -675,7 +636,6 @@ class LocalMaskedMHCA(nn.Module):
         k = self.key_norm(k)
         v, _ = self.value_conv(x, mask)
         v = self.value_norm(v)
-
         # 步骤2: 查询、键、值变换和重塑
         q = self.query(q)
         k = self.key(k)
@@ -740,16 +700,63 @@ class LocalMaskedMHCA(nn.Module):
         return out, qx_mask
 
 
+# ===== 新增：局部边界对比模块 =====
+class LocalBoundaryContrast(nn.Module):
+    """
+    局部边界对比模块 (Local Boundary Contrast, LBC)
+    与自注意力并行，显式生成边界显著性图，用于增强边界感知。
+    """
+    def __init__(self, n_embd, window_size=5):
+        super().__init__()
+        self.n_embd = n_embd
+        self.window_size = window_size
+
+        # 用于计算上下文差异的轻量卷积网络
+        self.context_net = nn.Sequential(
+            nn.Conv1d(n_embd, n_embd // 2, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv1d(n_embd // 2, 1, kernel_size=3, padding=1),
+        )
+        # 融合差分强度和上下文差异（2个特征图 -> 1个显著性图）
+        self.fusion = nn.Conv1d(2, 1, kernel_size=1)
+
+    def forward(self, x, mask):
+        """
+        参数:
+            x: 输入特征 [B, C, T]
+            mask: 有效位置掩码 [B, 1, T] (bool)
+        返回:
+            boundary_attn: 边界显著性图 [B, T, 1] (经过Sigmoid，值域0-1)
+        """
+        B, C, T = x.shape
+        mask_float = mask.to(x.dtype)
+        # 1. 一阶差分：捕捉变化强度
+        # 注意：对掩码区域进行填充，避免差分计算引入噪声
+        x_masked = x * mask_float
+        diff = x_masked[:, :, 1:] - x_masked[:, :, :-1]  # [B, C, T-1]
+        diff = F.pad(diff, (0, 1))  # [B, C, T]
+        # 计算L2范数作为变化强度标量
+        diff_strength = torch.norm(diff, dim=1, keepdim=True)  # [B, 1, T]
+        # 2. 上下文差异：捕捉变化质量
+        # 通过轻量网络计算每个时间点与其上下文的语义差异
+        context_diff = self.context_net(x)  # [B, 1, T]
+        # 3. 融合并生成显著性图
+        combined = torch.cat([diff_strength, context_diff], dim=1)  # [B, 2, T]
+        boundary_attn = torch.sigmoid(self.fusion(combined))  # [B, 1, T]
+        # 4. 确保无效位置（mask=False）的显著性为0
+        boundary_attn = boundary_attn * mask_float
+        # 转置为 [B, T, 1] 便于后续与特征加权（如果特征格式是B,C,T则无需转置）
+        # boundary_attn = boundary_attn.transpose(1, 2) # 根据后续融合方式决定
+        return boundary_attn
+
 class TransformerBlock(nn.Module):
     """
     一个简单的Transformer块（Post-LayerNorm版本）
-
     支持以下特性:
     - 全局/卷积/局部三种注意力机制
     - Q/X和K/V不同的下采样率（适合金字塔结构）
     - DropPath（随机深度）
     - 可插拔的位置编码
-
     参数说明:
         n_embd: 输入特征维度
         n_head: 注意力头数量
@@ -776,11 +783,13 @@ class TransformerBlock(nn.Module):
             proj_pdrop=0.0,  # 投影层dropout率
             path_pdrop=0.0,  # DropPath概率
             mha_win_size=-1,  # >0时使用窗口注意力
-            use_rel_pe=False  # 是否使用相对位置编码
+            use_rel_pe=False,  # 是否使用相对位置编码
+            use_lbc=False,  # 是否使用局部边界对比模块
+            lbc_win_size=5,  # 局部边界对比窗口大小
+            lbc_fusion_gate=0.2 # 可学习的融合门控初始值
     ):
         super().__init__()
         assert len(n_ds_strides) == 2
-
         # 层归一化（适用于B, C, T顺序）
         self.ln1 = LayerNorm(n_embd)
         self.ln2 = LayerNorm(n_embd)
@@ -811,7 +820,7 @@ class TransformerBlock(nn.Module):
 
         # 跳跃连接的下采样处理
         if n_ds_strides[0] > 1:
-            # 当Q&X有下采样时，需要对跳跃连接也进行下采样
+            # 当Q & X有下采样时，需要对跳跃连接也进行下采样
             kernel_size, stride, padding = \
                 n_ds_strides[0] + 1, n_ds_strides[0], (n_ds_strides[0] + 1) // 2
             self.pool_skip = nn.MaxPool1d(
@@ -841,20 +850,41 @@ class TransformerBlock(nn.Module):
             self.drop_path_attn = nn.Identity()
             self.drop_path_mlp = nn.Identity()
 
+        #===新增==LBC模块初始化
+        self.use_lbc = use_lbc
+        if self.use_lbc:
+            self.lbc=LocalBoundaryContrast(n_embd,window_size=lbc_win_size)
+            # 可学习的融合门控参数
+            self.lbc_gate = nn.Parameter(torch.tensor(lbc_fusion_gate,dtype=torch.float32))
+
     def forward(self, x, mask, pos_embd=None):
         """
         前向传播
 
         采用Pre-LN结构：https://arxiv.org/pdf/2002.04745.pdf
         Pre-LN比传统的Post-LN更稳定，更容易训练深层的Transformer。
+
+        采用 Pre-LN 结构: LN -> Attention -> + -> LN -> FFN -> +
+        现在插入: LN -> (Attention 并行 LBC) -> 融合 -> + -> LN -> FFN ->+
+
         """
-        # 注意力部分
-        out, out_mask = self.attn(self.ln1(x), mask)
-        out_mask_float = out_mask.to(out.dtype)
+        #注意力路径
+        attn_out, out_mask = self.attn(self.ln1(x), mask)
+        out_mask_float = out_mask.to(attn_out.dtype)
+        #边界感知增强路径 （与注意力路径并行）
+        if self.use_lbc and self.training:
+            # 重要：使用与主义路径相同的归一化特征进行计算，确保输出一致
+            lbc_boundary_attn=self.lbc(self.ln1(x),mask) #得到边界显著性图 [B, T, 1]
+            # 将边界显著性图作为“注意力图的注意力”，加权到注意力输出上
+            # 使用门控参数控制增强强度，避免初期训练不稳定
+
+            attn_out = attn_out * (1.0 + self.lbc_gate * lbc_boundary_attn)
+            # 可选：保存起来供损失函数使用
+            self._cache_boudary_attn=lbc_boundary_attn.detach()
 
         # 残差连接 + DropPath
         # 注意：跳跃连接需要与注意力输出进行掩码对齐
-        out = self.pool_skip(x) * out_mask_float + self.drop_path_attn(out)
+        out = self.pool_skip(x) * out_mask_float + self.drop_path_attn(attn_out)
 
         # FFN部分
         out = out + self.drop_path_mlp(self.mlp(self.ln2(out)) * out_mask_float)

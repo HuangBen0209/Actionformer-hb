@@ -13,3 +13,13 @@ python ./train.py ./configs/thumos_i3d.yaml --output reproduce
 tensorboard --logdir=./ckpt/thumos_i3d_reproduce/logs
 评估：
 python ./eval.py ./configs/thumos_i3d.yaml ./ckpt/thumos_i3d_reproduce
+
+
+
+
+
+--带有最优模型保存逻辑的训练脚本
+python ./train_best.py ./configs/thumos_i3d_small.yaml --output reproduce
+
+--评估
+python ./eval.py ./configs/thumos_i3d_small.yaml ./ckpt/thumos_i3d_small_reproduce

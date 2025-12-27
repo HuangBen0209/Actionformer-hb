@@ -215,7 +215,6 @@ def make_scheduler(optimizer, optimizer_config, num_iters_per_epoch, last_epoch=
         # 获取预热参数
         warmup_epochs = optimizer_config["warmup_epochs"]
         warmup_steps = warmup_epochs * num_iters_per_epoch
-
         # 带线性预热的调度器
         if optimizer_config["schedule_type"] == "cosine":
             scheduler = LinearWarmupCosineAnnealingLR(
@@ -248,7 +247,6 @@ def make_scheduler(optimizer, optimizer_config, num_iters_per_epoch, last_epoch=
         # 无预热：总轮次=训练轮次
         max_epochs = optimizer_config["epochs"]
         max_steps = max_epochs * num_iters_per_epoch
-
         # 原生调度器（无预热）
         if optimizer_config["schedule_type"] == "cosine":
             scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -267,7 +265,6 @@ def make_scheduler(optimizer, optimizer_config, num_iters_per_epoch, last_epoch=
             )
         else:
             raise TypeError("不支持的调度器类型！仅支持cosine/multistep")
-
     return scheduler
 
 
@@ -470,7 +467,8 @@ def train_one_epoch(train_loader, model, optimizer, scheduler, curr_epoch, model
     return
 
 
-def valid_one_epoch(val_loader, model, curr_epoch, ext_score_file=None, evaluator=None, output_file=None, tb_writer=None, print_freq=20):
+def valid_one_epoch(val_loader, model, curr_epoch, ext_score_file=None,
+                    evaluator=None, output_file=None, tb_writer=None, print_freq=20):
     """
     执行单轮次模型验证
     参数：

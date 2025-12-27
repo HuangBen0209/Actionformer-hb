@@ -23,14 +23,14 @@ model:
   fpn_type: identity        # 时域 FPN 类型；identity 表示不用金字塔，直接原尺度特征
   max_buffer_len_factor: 6 # 自注意力缓存长度 = 6 * 2304，保证长视频不溢出
   n_mha_win_size: 19        # 滑动窗口 Transformer 的窗口大小（奇数），降低长序列计算量
-  use_abs_pe: True      # 是否使用绝对位置编码
-  use_rel_pe: false    # 是否使用相对位置编码
+  use_abs_pe: true      # 是否使用绝对位置编码
+  use_rel_pe:  false   # 是否使用相对位置编码
 # ====================== 优化器 ======================
 opt:
-  learning_rate: 0.0001   # 初始 lr，Transformer 类模型常用 1e-4 起步
-  epochs: 30              # 训练总轮数
-  weight_decay: 0.05      # AdamW 的 weight_decay，较大值可缓解过拟合
-
+  learning_rate: 0.0001
+  warmup_epochs: 20
+  epochs: 30
+  weight_decay: 0.025
 # ====================== 数据加载 ======================
 loader:
   batch_size: 2           # 单卡 batch=2，显存占用≈11G（2080Ti 可跑）；多卡可再调大
